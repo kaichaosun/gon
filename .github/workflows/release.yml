@@ -1,65 +1,34 @@
 name: Release
 on:
-  workflow_dispatch:
+  push:
+    tags:
+      - "v*.*.*"
 
 permissions:
-  contents: write
-  packages: write
-
-env:
-  GH_USER: "bearer-bot"
+  contents: read
 
 jobs:
-  tag:
-    runs-on: ubuntu-latest
-
+  build-wails:
+    name: Build wails
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-latest
+            platform: darwin/universal
+    runs-on: ${{ matrix.os }}
     steps:
-      - uses: actions/checkout@v4
-      - name: Bump version and push tag
-        if: startsWith(github.ref, 'refs/tags') != true
-        id: tag_version
-        uses: mathieudutour/github-tag-action@v6.1
+      - uses: actions/checkout@v3
         with:
-          github_token: ${{ secrets.GITHUB_TOKEN }}
-          tag_prefix: v
-          default_bump: patch
-    outputs:
-      ref: refs/tags/${{ steps.tag_version.outputs.new_tag || github.ref_name }}
-
-  build:
-    needs: [tag]
-    name: build
-    runs-on: macos-12
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-          ref: ${{ needs.tag.outputs.ref }}
-      - run: git fetch --force --tags
+          submodules: recursive
       - name: Set up Go
         uses: actions/setup-go@v4
         with:
           go-version: 1.21
-      - name: Setup Gon
-        run: brew install Bearer/tap/gon
-      - name: Import Code-Signing Certificates
-        uses: Apple-Actions/import-codesign-certs@v2
+      - name: Build gon binary
+        working-directory: cmd/gon
+        run: go build
+      - uses: softprops/action-gh-release@v1
+        if: startsWith(github.ref, 'refs/tags/')
         with:
-          # The certificates in a PKCS12 file encoded as a base64 string
-          p12-file-base64: ${{ secrets.APPLE_DEVELOPER_CERTIFICATE_P12_BASE64 }}
-          # The password used to import the PKCS12 file.
-          p12-password: ${{ secrets.APPLE_DEVELOPER_CERTIFICATE_PASSWORD }}
-      - uses: goreleaser/goreleaser-action@v5
-        name: Run GoReleaser
-        with:
-          version: latest
-          args: release --clean
-        env:
-          GOOS: darwin
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          AC_APPLICATION_IDENTITY: ${{ secrets.AC_APPLICATION_IDENTITY }}
-          AC_USERNAME: ${{ secrets.AC_USERNAME }}
-          AC_PASSWORD: ${{ secrets.AC_PASSWORD }}
-          AC_PROVIDER: ${{ secrets.AC_PROVIDER }}
-          HOMEBREW_TAP_GITHUB_TOKEN: ${{ secrets.BEARER_GITHUB_TOKEN }}
+          files: cmd/gon/gon
