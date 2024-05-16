@@ -152,7 +152,7 @@ func createRoot(ctx context.Context, logger hclog.Logger, opts *Options) (string
 		filepath.Base(cmd.Path),
 	}
 	cmd.Args = append(cmd.Args, opts.Files...)
-	cmd.Args = append(cmd.Args, root)
+	cmd.Args = append(cmd.Args, appDir)
 
 	// We store all output in out for logging and in case there is an error
 	var out bytes.Buffer
